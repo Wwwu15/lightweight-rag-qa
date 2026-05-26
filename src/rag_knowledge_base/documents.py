@@ -81,6 +81,7 @@ def _load_pdf(path: Path) -> list[Document]:
         raise ImportError("PDF loading requires pypdf or langchain-community.") from exc
 
     documents = []
+    # Open explicitly in a context manager so Windows can release the PDF after parsing.
     with path.open("rb") as pdf_file:
         reader = PdfReader(pdf_file)
         for page_number, page in enumerate(reader.pages):
@@ -92,6 +93,7 @@ def _load_pdf(path: Path) -> list[Document]:
 
 def _safe_file_name(file_name: str) -> str:
     name = Path(file_name).name
+    # Normalize uploaded names to a portable subset before saving under data/raw.
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._")
     if not safe:
         raise ValueError("File name must include at least one safe character")

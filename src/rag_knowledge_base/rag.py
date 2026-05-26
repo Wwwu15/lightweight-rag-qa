@@ -88,6 +88,7 @@ class RAGKnowledgeBase:
             document_id = str(metadata.get("document_id") or source or _content_id(text))
             base_metadata = {**metadata, "source": source, "document_id": document_id}
 
+            # Stable chunk ids make later deletion by source/file name predictable across stores.
             for chunk_index, chunk_text in enumerate(self._split_text(text)):
                 chunk_metadata = {
                     **base_metadata,
@@ -254,6 +255,7 @@ def build_chroma_vector_store(
         try:
             from langchain_community.vectorstores import Chroma
         except ImportError:
+            # Keep the MVP runnable even when Chroma native dependencies are not installed yet.
             return JsonVectorStore(
                 persist_directory=persist_directory,
                 embedding_function=embedding_function,
@@ -447,11 +449,13 @@ class JsonVectorStore:
             return
         raw_payload = self.store_path.read_text(encoding="utf-8")
         if not raw_payload.strip():
+            # A failed previous write can leave an empty file; recover with an empty collection.
             self.reset_collection()
             return
         try:
             payload = json.loads(raw_payload)
         except json.JSONDecodeError:
+            # Corrupt fallback storage should not prevent the app from starting.
             self.reset_collection()
             return
         self.documents = [
@@ -481,6 +485,7 @@ def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
 
 
 def _sanitize_document(document: Document) -> Document:
+    # Some PDF extractors emit invalid surrogate code points that JSON cannot persist safely.
     return Document(
         page_content=_strip_surrogates(document.page_content),
         metadata=_sanitize_json_value(dict(document.metadata)),

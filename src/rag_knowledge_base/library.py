@@ -64,6 +64,7 @@ def delete_documents(
             failed_files.append(document_path.name)
             continue
 
+        # Delete vectors only after the raw file is gone, keeping file and index state consistent.
         deleted_files.append(document_path.name)
         deleted_chunks += int(
             pipeline.delete_documents(source=str(document_path), file_name=document_path.name)
@@ -106,6 +107,7 @@ def clear_raw_documents_by_suffix(
 
 def _safe_child(parent: Path, file_name: str) -> Path | None:
     try:
+        # Resolve against the raw directory and discard path traversal attempts.
         parent_resolved = parent.resolve()
         child = (parent_resolved / Path(file_name).name).resolve()
         child.relative_to(parent_resolved)

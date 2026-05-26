@@ -48,6 +48,7 @@ def get_settings() -> Settings:
 
 
 def get_pipeline(_settings: Settings) -> RagPipeline:
+    # Keep the pipeline uncached so document deletion and vector-store state stay fresh.
     return RagPipeline.from_settings(_settings)
 
 
@@ -185,6 +186,7 @@ def main() -> None:
 
     with st.sidebar:
         st.header("文档入库")
+        # Streamlit keeps file_uploader selections by widget key; bump this after ingest to clear it.
         st.session_state.setdefault("uploader_version", 0)
         uploaded_files = st.file_uploader(
             "上传 PDF 或 Word 文档",

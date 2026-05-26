@@ -1,0 +1,14 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+.playwright-mcp/
+.idea/
+*.pyc
+.streamlit/secrets.toml
+data/raw/*
+!data/raw/.gitkeep
+data/chroma/*
+!data/chroma/.gitkeep
+htmlcov/
+.coverage

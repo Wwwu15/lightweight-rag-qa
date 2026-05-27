@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI
 
 @dataclass(slots=True)
 class LLMConfig:
-    """外部 OpenAI 兼容 LLM API 配置。"""
+    """外部 LLM API 配置。"""
 
     base_url: str
     model: str

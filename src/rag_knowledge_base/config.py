@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""项目配置读取模块，统一管理 .env 和默认参数。"""
+
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,6 +10,7 @@ from dotenv import load_dotenv
 
 
 def _env(name: str, default: str, *aliases: str) -> str:
+    """读取环境变量，支持新旧变量名兼容。"""
     for candidate in (name, *aliases):
         value = os.getenv(candidate)
         if value not in (None, ""):
@@ -16,6 +19,7 @@ def _env(name: str, default: str, *aliases: str) -> str:
 
 
 def _env_int(name: str, default: int) -> int:
+    """读取整数型环境变量。"""
     aliases = {
         "RAG_CHUNK_SIZE": ("CHUNK_SIZE",),
         "RAG_CHUNK_OVERLAP": ("CHUNK_OVERLAP",),
@@ -33,6 +37,8 @@ def _env_int(name: str, default: int) -> int:
 
 @dataclass(slots=True)
 class Settings:
+    """应用运行配置。"""
+
     raw_dir: Path = field(default_factory=lambda: Path(_env("RAG_RAW_DIR", "data/raw", "RAW_DATA_DIR")))
     chroma_dir: Path = field(
         default_factory=lambda: Path(_env("RAG_CHROMA_DIR", "data/chroma", "CHROMA_PERSIST_DIR"))
@@ -51,6 +57,7 @@ class Settings:
     top_k: int = field(default_factory=lambda: _env_int("RAG_TOP_K", 4))
 
     def __post_init__(self) -> None:
+        """加载 .env 后重新覆盖默认配置。"""
         load_dotenv(dotenv_path=Path.cwd() / ".env", override=False)
         self.raw_dir = Path(_env("RAG_RAW_DIR", str(self.raw_dir), "RAW_DATA_DIR"))
         self.chroma_dir = Path(_env("RAG_CHROMA_DIR", str(self.chroma_dir), "CHROMA_PERSIST_DIR"))
@@ -65,12 +72,15 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        """从当前环境构建配置对象。"""
         return cls()
 
     @property
     def raw_data_dir(self) -> Path:
+        """兼容旧代码中的 raw_data_dir 命名。"""
         return self.raw_dir
 
     @property
     def chroma_persist_dir(self) -> Path:
+        """兼容旧代码中的 chroma_persist_dir 命名。"""
         return self.chroma_dir

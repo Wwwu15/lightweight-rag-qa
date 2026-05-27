@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""文档保存和解析模块，支持 PDF 与 Word 文档。"""
+
 import re
 import shutil
 from pathlib import Path
@@ -22,6 +24,7 @@ def save_uploaded_file(
     file_name_or_raw_dir: str | Path,
     raw_dir: str | Path | None = None,
 ) -> Path:
+    """保存上传文件到 raw 目录并返回本地路径。"""
     if raw_dir is None:
         raw_dir = file_name_or_raw_dir
         file_name = getattr(file_obj, "name", None)
@@ -45,6 +48,7 @@ def save_uploaded_file(
 
 
 def load_document(path: str | Path) -> list[Document]:
+    """按文件类型解析单个文档为 LangChain Document。"""
     document_path = Path(path)
     _ensure_supported(document_path)
 
@@ -59,6 +63,7 @@ def load_document(path: str | Path) -> list[Document]:
 
 
 def load_documents(paths: Iterable[str | Path]) -> list[Document]:
+    """批量解析多个文档。"""
     documents: list[Document] = []
     for path in paths:
         documents.extend(load_document(path))
@@ -66,12 +71,14 @@ def load_documents(paths: Iterable[str | Path]) -> list[Document]:
 
 
 def _load_docx(path: Path) -> Document:
+    """读取 docx 段落文本。"""
     doc = DocxDocument(path)
     paragraphs = [paragraph.text for paragraph in doc.paragraphs if paragraph.text]
     return Document(page_content="\n\n".join(paragraphs), metadata={})
 
 
 def _load_pdf(path: Path) -> list[Document]:
+    """优先使用 LangChain Loader，缺失时退回 pypdf。"""
     if PyPDFLoader is not None:
         return PyPDFLoader(str(path)).load()
 
@@ -81,7 +88,6 @@ def _load_pdf(path: Path) -> list[Document]:
         raise ImportError("PDF loading requires pypdf or langchain-community.") from exc
 
     documents = []
-    # Open explicitly in a context manager so Windows can release the PDF after parsing.
     with path.open("rb") as pdf_file:
         reader = PdfReader(pdf_file)
         for page_number, page in enumerate(reader.pages):
@@ -92,8 +98,8 @@ def _load_pdf(path: Path) -> list[Document]:
 
 
 def _safe_file_name(file_name: str) -> str:
+    """将上传文件名转换为安全的本地文件名。"""
     name = Path(file_name).name
-    # Normalize uploaded names to a portable subset before saving under data/raw.
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._")
     if not safe:
         raise ValueError("File name must include at least one safe character")
@@ -101,12 +107,14 @@ def _safe_file_name(file_name: str) -> str:
 
 
 def _ensure_supported(path: Path) -> None:
+    """校验文件扩展名是否受支持。"""
     if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
         supported = ", ".join(sorted(SUPPORTED_EXTENSIONS))
         raise ValueError(f"Unsupported file type: {path.suffix or '<none>'}. Use {supported}.")
 
 
 def _metadata_for(path: Path) -> dict[str, str]:
+    """生成后续引用和删除所需的基础 metadata。"""
     suffix = path.suffix.lower().lstrip(".")
     return {
         "source": str(path),

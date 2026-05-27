@@ -9,6 +9,7 @@ def build_rag_prompt(question: str, documents: Sequence[Mapping[str, str]]) -> s
     """Build a grounded QA prompt with numbered source context."""
     context_blocks = []
     for index, document in enumerate(documents, start=1):
+        # 每个检索片段都带编号，方便模型在答案中引用来源。
         source = document.get("source") or "unknown"
         chunk_id = document.get("chunk_id") or ""
         content = document.get("content") or ""

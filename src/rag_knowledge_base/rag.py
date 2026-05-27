@@ -20,6 +20,8 @@ from rag_knowledge_base.prompts import build_rag_prompt
 
 @dataclass(slots=True)
 class RAGConfig:
+    """RAG 核心层配置。"""
+
     persist_directory: Path | str
     embedding_model: str = "nomic-embed-text:v1.5"
     ollama_base_url: str = "http://localhost:11434"
@@ -30,6 +32,7 @@ class RAGConfig:
 
     @classmethod
     def from_env(cls) -> "RAGConfig":
+        """从环境变量构建 RAG 配置。"""
         return cls(
             persist_directory=os.getenv("CHROMA_PERSIST_DIR", "data/chroma"),
             embedding_model=os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text:v1.5"),
@@ -41,6 +44,7 @@ class RAGConfig:
 
     @classmethod
     def from_settings(cls, settings: Any) -> "RAGConfig":
+        """从应用层 Settings 转换为 RAGConfig。"""
         return cls(
             persist_directory=getattr(settings, "chroma_persist_dir", getattr(settings, "chroma_dir")),
             embedding_model=getattr(settings, "ollama_model"),
@@ -53,6 +57,8 @@ class RAGConfig:
 
 @dataclass(slots=True)
 class RAGAnswer:
+    """问答结果和引用来源。"""
+
     answer: str
     sources: list[dict[str, Any]]
 
@@ -88,7 +94,6 @@ class RAGKnowledgeBase:
             document_id = str(metadata.get("document_id") or source or _content_id(text))
             base_metadata = {**metadata, "source": source, "document_id": document_id}
 
-            # Stable chunk ids make later deletion by source/file name predictable across stores.
             for chunk_index, chunk_text in enumerate(self._split_text(text)):
                 chunk_metadata = {
                     **base_metadata,
@@ -102,6 +107,7 @@ class RAGKnowledgeBase:
         return list(self.vector_store.add_documents(chunks))
 
     def ingest_documents(self, documents: Sequence[Mapping[str, Any] | Document]) -> list[str]:
+        """入库接口别名，供应用层调用。"""
         return self.add_documents(documents)
 
     def retrieve(self, query: str, top_k: int | None = None) -> list[Document]:
@@ -255,7 +261,6 @@ def build_chroma_vector_store(
         try:
             from langchain_community.vectorstores import Chroma
         except ImportError:
-            # Keep the MVP runnable even when Chroma native dependencies are not installed yet.
             return JsonVectorStore(
                 persist_directory=persist_directory,
                 embedding_function=embedding_function,
@@ -271,6 +276,7 @@ def build_chroma_vector_store(
 
 
 def _normalize_input_document(document: Mapping[str, Any] | Document) -> tuple[str, str, dict[str, Any]]:
+    """统一处理 LangChain Document 和普通 dict 两种输入。"""
     if isinstance(document, Document):
         metadata = dict(document.metadata)
         text = document.page_content
@@ -284,10 +290,12 @@ def _normalize_input_document(document: Mapping[str, Any] | Document) -> tuple[s
 
 
 def _content_id(text: str) -> str:
+    """根据内容生成短哈希 id。"""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
 def _source_metadata(document: Document) -> dict[str, Any]:
+    """整理页面展示引用来源所需的 metadata。"""
     metadata = dict(document.metadata)
     return {
         "source": str(metadata.get("source", "unknown")),
@@ -301,9 +309,11 @@ def _source_metadata(document: Document) -> dict[str, Any]:
 class RagPipeline(RAGKnowledgeBase):
     @classmethod
     def from_settings(cls, settings: Any) -> "RagPipeline":
+        """从应用配置创建 RAG 流水线。"""
         return cls(config=RAGConfig.from_settings(settings))
 
     def answer(self, question: str, top_k: int | None = None) -> RAGAnswer:
+        """检索相关分片，调用 LLM，并返回答案与来源。"""
         retrieved = self.retrieve(question, top_k=top_k)
         prompt_documents = [
             {
@@ -355,12 +365,15 @@ class SimpleOllamaEmbeddings:
         self.base_url = base_url.rstrip("/")
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """批量生成文档向量。"""
         return [self._embed(text) for text in texts]
 
     def embed_query(self, text: str) -> list[float]:
+        """生成查询向量。"""
         return self._embed(text)
 
     def _embed(self, text: str) -> list[float]:
+        """调用 Ollama embeddings 接口。"""
         payload = json.dumps({"model": self.model, "prompt": text}).encode("utf-8")
         req = request.Request(
             f"{self.base_url}/api/embeddings",
@@ -396,6 +409,7 @@ class JsonVectorStore:
         self._load()
 
     def add_documents(self, documents: Sequence[Document]) -> list[str]:
+        """添加文档分片并持久化向量。"""
         sanitized_documents = [_sanitize_document(document) for document in documents]
         texts = [document.page_content for document in sanitized_documents]
         vectors = self.embedding_function.embed_documents(texts)
@@ -409,6 +423,7 @@ class JsonVectorStore:
         return ids
 
     def similarity_search(self, query: str, k: int) -> list[Document]:
+        """使用余弦相似度检索最相关分片。"""
         if not self.documents:
             return []
         query_vector = self.embedding_function.embed_query(query)
@@ -420,6 +435,7 @@ class JsonVectorStore:
         return [self.documents[index] for _, index in scored[:k]]
 
     def delete(self, ids: Sequence[str] | None = None, where: Mapping[str, Any] | None = None) -> None:
+        """按 chunk id 或 metadata 条件删除分片。"""
         id_set = set(ids or [])
 
         def should_delete(document: Document) -> bool:
@@ -440,22 +456,22 @@ class JsonVectorStore:
         self._persist()
 
     def reset_collection(self) -> None:
+        """清空 JSON fallback 向量库。"""
         self.documents = []
         self.vectors = []
         self._persist()
 
     def _load(self) -> None:
+        """从磁盘加载 JSON fallback 向量库。"""
         if not self.store_path.exists():
             return
         raw_payload = self.store_path.read_text(encoding="utf-8")
         if not raw_payload.strip():
-            # A failed previous write can leave an empty file; recover with an empty collection.
             self.reset_collection()
             return
         try:
             payload = json.loads(raw_payload)
         except json.JSONDecodeError:
-            # Corrupt fallback storage should not prevent the app from starting.
             self.reset_collection()
             return
         self.documents = [
@@ -465,6 +481,7 @@ class JsonVectorStore:
         self.vectors = payload.get("vectors", [])
 
     def _persist(self) -> None:
+        """将 JSON fallback 向量库写回磁盘。"""
         payload = {
             "documents": [
                 {"page_content": document.page_content, "metadata": document.metadata}
@@ -476,6 +493,7 @@ class JsonVectorStore:
 
 
 def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    """计算两个向量的余弦相似度。"""
     dot = sum(a * b for a, b in zip(left, right))
     left_norm = math.sqrt(sum(a * a for a in left))
     right_norm = math.sqrt(sum(b * b for b in right))
@@ -485,7 +503,7 @@ def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
 
 
 def _sanitize_document(document: Document) -> Document:
-    # Some PDF extractors emit invalid surrogate code points that JSON cannot persist safely.
+    """清洗文档内容和 metadata，避免非法字符写入 JSON。"""
     return Document(
         page_content=_strip_surrogates(document.page_content),
         metadata=_sanitize_json_value(dict(document.metadata)),
@@ -493,6 +511,7 @@ def _sanitize_document(document: Document) -> Document:
 
 
 def _sanitize_json_value(value: Any) -> Any:
+    """递归清洗可 JSON 序列化的数据。"""
     if isinstance(value, str):
         return _strip_surrogates(value)
     if isinstance(value, dict):
@@ -506,4 +525,5 @@ def _sanitize_json_value(value: Any) -> Any:
 
 
 def _strip_surrogates(value: str) -> str:
+    """移除 JSON 无法安全保存的 Unicode surrogate 字符。"""
     return "".join(char for char in value if not 0xD800 <= ord(char) <= 0xDFFF)

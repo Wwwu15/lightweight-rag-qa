@@ -10,6 +10,8 @@ from langchain_openai import ChatOpenAI
 
 @dataclass(slots=True)
 class LLMConfig:
+    """外部 OpenAI 兼容 LLM API 配置。"""
+
     base_url: str
     model: str
     api_key: str
@@ -17,6 +19,7 @@ class LLMConfig:
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
+        """从环境变量读取 LLM 配置。"""
         return cls(
             base_url=os.getenv("LLM_BASE_URL", ""),
             model=os.getenv("LLM_MODEL", ""),

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Streamlit 页面入口，负责文档入库、文档管理和问答交互。"""
+
 import sys
 from pathlib import Path
 
@@ -23,6 +25,7 @@ st.set_page_config(page_title="本地 RAG 知识库", page_icon="RAG", layout="w
 
 
 def hide_streamlit_builtin_chrome() -> None:
+    """隐藏 Streamlit 自带的英文菜单、部署按钮和页脚。"""
     st.markdown(
         """
         <style>
@@ -44,15 +47,17 @@ def hide_streamlit_builtin_chrome() -> None:
 
 @st.cache_resource(show_spinner=False)
 def get_settings() -> Settings:
+    """读取并缓存运行配置。"""
     return Settings.from_env()
 
 
 def get_pipeline(_settings: Settings) -> RagPipeline:
-    # Keep the pipeline uncached so document deletion and vector-store state stay fresh.
+    """创建 RAG 流水线实例。"""
     return RagPipeline.from_settings(_settings)
 
 
 def show_delete_result(result: DeleteResult) -> None:
+    """根据删除结果显示成功或失败提示。"""
     if result.deleted_files:
         st.success(
             f"已删除 {len(result.deleted_files)} 个文件，"
@@ -68,11 +73,13 @@ def show_delete_result(result: DeleteResult) -> None:
 
 
 def rerun_after_success(result: DeleteResult) -> None:
+    """删除完全成功后刷新页面，让文档列表立即更新。"""
     if not result.failed_files:
         st.rerun()
 
 
 def render_sources(sources: list[dict[str, str]]) -> None:
+    """渲染回答引用来源。"""
     if not sources:
         st.caption("暂无引用来源。")
         return
@@ -101,6 +108,7 @@ def render_document_group(
     delete_label: str,
     clear_label: str,
 ) -> None:
+    """渲染某一类文档的列表、勾选删除和清空按钮。"""
     with st.expander(f"{label}（{len(documents)}）", expanded=False):
         if not documents:
             st.caption(f"暂无 {label}。")
@@ -142,6 +150,7 @@ def render_document_group(
 
 
 def render_document_management(settings: Settings, pipeline: RagPipeline) -> None:
+    """渲染侧边栏中的 Word/PDF 文档管理区域。"""
     st.header("文档管理")
     groups = group_raw_documents_by_type(settings.raw_data_dir)
 
@@ -177,6 +186,7 @@ def render_document_management(settings: Settings, pipeline: RagPipeline) -> Non
 
 
 def main() -> None:
+    """组装 Streamlit 页面并处理用户交互。"""
     hide_streamlit_builtin_chrome()
 
     settings = get_settings()
@@ -186,7 +196,6 @@ def main() -> None:
 
     with st.sidebar:
         st.header("文档入库")
-        # Streamlit keeps file_uploader selections by widget key; bump this after ingest to clear it.
         st.session_state.setdefault("uploader_version", 0)
         uploaded_files = st.file_uploader(
             "上传 PDF 或 Word 文档",
